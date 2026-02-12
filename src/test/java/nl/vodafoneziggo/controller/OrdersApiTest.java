@@ -1,6 +1,7 @@
 package nl.vodafoneziggo.controller;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -136,6 +137,15 @@ public class OrdersApiTest {
                 .content(objectMapper.writeValueAsString(request))).andExpect(status().isOk());
         Assertions.assertTrue(orderRepository.findByEmailAndProductID("a@aa.nl", 123).isEmpty());
         Assertions.assertTrue(orderRepository.findByEmailAndProductID("b@bb.nl", 123).isPresent());
+    }
+
+    @Test
+    void test_deleteOrder_happyFlow() throws Exception {
+        createOrder(123, "a@aa.nl");
+        Assertions.assertTrue(orderRepository.findByEmailAndProductID("a@aa.nl", 123).isPresent());
+        mockMvc.perform(delete("/api/orders/1").contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+        Assertions.assertTrue(orderRepository.findByEmailAndProductID("a@aa.nl", 123).isEmpty());
     }
 
     private List<OrderEntity> getOrders(String email) throws Exception {
