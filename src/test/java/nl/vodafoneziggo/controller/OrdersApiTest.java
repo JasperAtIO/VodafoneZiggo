@@ -3,6 +3,7 @@ package nl.vodafoneziggo.controller;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
@@ -29,6 +30,7 @@ import nl.vodafoneziggo.external.reqres.ReqresClient;
 import nl.vodafoneziggo.external.reqres.ReqresUser;
 import nl.vodafoneziggo.model.OrderEntity;
 import nl.vodafoneziggo.orders.model.CreateOrderRequest;
+import nl.vodafoneziggo.orders.model.UpdateOrderRequest;
 import nl.vodafoneziggo.repository.OrderRepository;
 
 import tools.jackson.databind.ObjectMapper;
@@ -123,6 +125,17 @@ public class OrdersApiTest {
                 .andExpect(result -> Assertions.assertEquals(
                         "400 BAD_REQUEST \"Email c@cc.nl does not exist in external user system\"",
                         Objects.requireNonNull(result.getResolvedException()).getCause().getMessage()));
+    }
+
+    @Test
+    void test_updateOrder_happyFlow() throws Exception {
+        createOrder(123, "a@aa.nl");
+        Assertions.assertTrue(orderRepository.findByEmailAndProductID("a@aa.nl", 123).isPresent());
+        UpdateOrderRequest request = new UpdateOrderRequest("b@bb.nl");
+        mockMvc.perform(put("/api/orders/1").contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))).andExpect(status().isOk());
+        Assertions.assertTrue(orderRepository.findByEmailAndProductID("a@aa.nl", 123).isEmpty());
+        Assertions.assertTrue(orderRepository.findByEmailAndProductID("b@bb.nl", 123).isPresent());
     }
 
     private List<OrderEntity> getOrders(String email) throws Exception {
