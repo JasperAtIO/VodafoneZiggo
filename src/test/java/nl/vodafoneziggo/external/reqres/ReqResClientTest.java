@@ -1,38 +1,37 @@
 package nl.vodafoneziggo.external.reqres;
 
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.client.MockRestServiceServer;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class ReqresClientTest {
 
-    private RestTemplate restTemplate;
-    private MockRestServiceServer server;
+    @RegisterExtension
+    static WireMockExtension wireMock = WireMockExtension.newInstance()
+            .options(wireMockConfig().port(8089))
+            .build();
+
     private ReqresClient client;
 
     @BeforeEach
     void setUp() {
-        restTemplate = new RestTemplate();
-        client = new ReqresClient(restTemplate, "https://reqres.in/api/users", "");
-        server = MockRestServiceServer.createServer(restTemplate);
+        RestTemplate restTemplate = new RestTemplate();
+        client = new ReqresClient(restTemplate, "http://localhost:8089/api/users", "");
     }
 
     @Test
     void findUserByEmail_whenFoundOnSecondPage_returnsUser_andFetchesTwoPages() {
         // Arrange
-        server.expect(requestTo("https://reqres.in/api/users?page=1"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("""
+        wireMock.stubFor(get(urlEqualTo("/api/users?page=1"))
+                .willReturn(okJson("""
                         {
                           "page": 1,
                           "total_pages": 2,
@@ -40,11 +39,10 @@ class ReqresClientTest {
                             { "id": 1, "email": "first@example.com", "first_name": "First", "last_name": "User" }
                           ]
                         }
-                        """, MediaType.APPLICATION_JSON));
+                        """)));
 
-        server.expect(requestTo("https://reqres.in/api/users?page=2"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("""
+        wireMock.stubFor(get(urlEqualTo("/api/users?page=2"))
+                .willReturn(okJson("""
                         {
                           "page": 2,
                           "total_pages": 2,
@@ -52,7 +50,7 @@ class ReqresClientTest {
                             { "id": 2, "email": "target@example.com", "first_name": "Target", "last_name": "User" }
                           ]
                         }
-                        """, MediaType.APPLICATION_JSON));
+                        """)));
 
         // Act
         Optional<ReqresUser> result = client.findUserByEmail("TARGET@example.com");
@@ -64,65 +62,78 @@ class ReqresClientTest {
         assertThat(result.get().getFirstName()).isEqualTo("Target");
         assertThat(result.get().getLastName()).isEqualTo("User");
 
-        server.verify();
+        // Verify both requests were made
+        wireMock.verify(getRequestedFor(urlEqualTo("/api/users?page=1")));
+        wireMock.verify(getRequestedFor(urlEqualTo("/api/users?page=2")));
     }
 
     @Test
     void findUserByEmail_whenNotFound_returnsEmpty_andStopsAfterLastPage() {
         // Arrange: 2 pages, no matching email on either
-        server.expect(requestTo("https://reqres.in/api/users?page=1"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("""
-                        {
-                          "page": 1,
-                          "total_pages": 2,
-                          "data": [
-                            { "id": 1, "email": "a@example.com", "first_name": "A", "last_name": "User" }
-                          ]
-                        }
-                        """, MediaType.APPLICATION_JSON));
+        wireMock.stubFor(get(urlEqualTo("/api/users?page=1"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "page": 1,
+                                  "total_pages": 2,
+                                  "data": [
+                                    { "id": 1, "email": "a@example.com", "first_name": "A", "last_name": "User" }
+                                  ]
+                                }
+                                """)));
 
-        server.expect(requestTo("https://reqres.in/api/users?page=2"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("""
-                        {
-                          "page": 2,
-                          "total_pages": 2,
-                          "data": [
-                            { "id": 2, "email": "b@example.com", "first_name": "B", "last_name": "User" }
-                          ]
-                        }
-                        """, MediaType.APPLICATION_JSON));
+        wireMock.stubFor(get(urlEqualTo("/api/users?page=2"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "page": 2,
+                                  "total_pages": 2,
+                                  "data": [
+                                    { "id": 2, "email": "b@example.com", "first_name": "B", "last_name": "User" }
+                                  ]
+                                }
+                                """)));
 
         // Act
         Optional<ReqresUser> result = client.findUserByEmail("missing@example.com");
 
         // Assert
         assertThat(result).isEmpty();
-        server.verify();
+
+        // Verify both pages were requested
+        wireMock.verify(getRequestedFor(urlEqualTo("/api/users?page=1")));
+        wireMock.verify(getRequestedFor(urlEqualTo("/api/users?page=2")));
     }
 
     @Test
     void findUserByEmail_whenTotalPagesMissing_returnsEmpty_afterFirstPage() {
         // Arrange: total_pages is absent -> client should stop and return empty
-        server.expect(requestTo("https://reqres.in/api/users?page=1"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("""
-                        {
-                          "page": 1,
-                          "data": [
-                            { "id": 1, "email": "a@example.com", "first_name": "A", "last_name": "User" }
-                          ]
-                        }
-                        """, MediaType.APPLICATION_JSON));
+        wireMock.stubFor(get(urlEqualTo("/api/users?page=1"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "page": 1,
+                                  "data": [
+                                    { "id": 1, "email": "a@example.com", "first_name": "A", "last_name": "User" }
+                                  ]
+                                }
+                                """)));
 
         // Act
         Optional<ReqresUser> result = client.findUserByEmail("missing@example.com");
 
         // Assert
         assertThat(result).isEmpty();
-        server.verify();
-    }
 
+        // Verify only first page was requested
+        wireMock.verify(getRequestedFor(urlEqualTo("/api/users?page=1")));
+        wireMock.verify(0, getRequestedFor(urlEqualTo("/api/users?page=2")));
+    }
 
 }
