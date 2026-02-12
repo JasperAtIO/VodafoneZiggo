@@ -102,24 +102,37 @@ public class OrdersApiTest {
         createOrder(765, "a@aa.nl");
         createOrder(765, "b@bb.nl");
         createOrder(321, "b@bb.nl");
-        List<OrderEntity> result = objectMapper.readValue(mockMvc.perform(get("/api/orders"))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString(), List.class);
+        List<OrderEntity> result = getOrders(null);
         Assertions.assertEquals(7, result.size());
-        result = objectMapper.readValue(mockMvc.perform(get("/api/orders?email=a@aa.nl"))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString(), List.class);
+        result = getOrders("a@aa.nl");
         Assertions.assertEquals(5, result.size());
-        result = objectMapper.readValue(mockMvc.perform(get("/api/orders?email=b@bb.nl"))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString(), List.class);
+        result = getOrders("b@bb.nl");
         Assertions.assertEquals(2, result.size());
+    }
+
+    @Test
+    void test_getOrders_noOrders() throws Exception {
+        Assertions.assertEquals(0, getOrders(null).size());
+        Assertions.assertEquals(0, getOrders("a@aa.nl").size());
+    }
+
+    @Test
+    void test_getOrders_invalidEmail() throws Exception {
+        mockMvc.perform(get("/api/orders?email=c@cc.nl"))
+                .andExpect(status().isBadRequest())
+                .andExpect(result -> Assertions.assertEquals(
+                        "400 BAD_REQUEST \"Email c@cc.nl does not exist in external user system\"",
+                        Objects.requireNonNull(result.getResolvedException()).getCause().getMessage()));
+    }
+
+    private List<OrderEntity> getOrders(String email) throws Exception {
+        List<OrderEntity> result = objectMapper.readValue(
+                mockMvc.perform(get("/api/orders" + (email != null ? "?email=" + email : "")))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(), List.class);
+        return result;
     }
 
     private void createOrder(Integer orderId, String mail) throws Exception {
