@@ -1,6 +1,5 @@
 package nl.vodafoneziggo.external.reqres;
 
-import lombok.Getter;
 import org.apache.logging.log4j.util.Strings;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +17,6 @@ import java.util.Optional;
  */
 @Component
 public class ReqresClient {
-    @Getter
     private final RestTemplate restTemplate;
     private final String BASE_URL;
     private final String apiKey;

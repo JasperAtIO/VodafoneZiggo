@@ -1,6 +1,7 @@
 package nl.vodafoneziggo.external.reqres;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 /**
@@ -16,6 +17,7 @@ import lombok.Data;
  * This class is primarily utilized in API interactions within the
  * {@code ReqresClient} and {@code ReqresUsersResponse} classes.
  */
+@AllArgsConstructor
 @Data
 public class ReqresUser {
     private Integer id;
